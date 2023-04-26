@@ -191,14 +191,14 @@ class DeviceService:Service(), CoroutinesServiceInterface, SerialInputOutputMana
             status("connected")
             connected = true
             //controlLines.start()
-            send("from machine import Pin")
+            /*send("from machine import Pin")
             send("import utime")
             send("led = Pin(19, Pin.OUT")
             send("led.value(1)")
             send("utime.sleep(5)")
             send("led.value(0)")
             send("utime.sleep(5)")
-            send("led.value(1)")
+            send("led.value(1)")*/
 
             myRunnable.start()
         } catch (e: Exception) {

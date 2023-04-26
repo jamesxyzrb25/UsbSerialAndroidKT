@@ -1,28 +1,31 @@
 package com.tekfy.usbserialandroidkt
 
+import android.Manifest
 import android.app.PendingIntent
+import android.content.ContentValues.TAG
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
-import android.os.Bundle
-import android.os.Handler
-import android.os.HandlerThread
+import android.location.Criteria
+import android.location.Location
+import android.location.LocationManager
+import android.os.*
 import android.widget.Toast
+
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+
 import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import com.tekfy.usbserialandroidkt.databinding.ActivityMainBinding
+import com.tekfy.usbserialandroidkt.util.PermissionUtils
 import java.util.ArrayList
 
 class MainActivity : AppCompatActivity(){
     private lateinit var binding: ActivityMainBinding
-
-    private val EXTENDED_TIMEOUT = 5000
-    private var mThread:HandlerThread? = null
-    private var mHandler:Handler? = null
-    private var mRunnable: MyTimerRunnable? = null
 
     inner class ListItem(device: UsbDevice?, port: Int, driver: UsbSerialDriver?) {
         var device: UsbDevice?
@@ -35,6 +38,9 @@ class MainActivity : AppCompatActivity(){
             this.driver = driver
         }
     }
+    private var permissionDenied = false
+    val handler = Handler()
+    private var location:Location? = null
 
     private val listItems: ArrayList<ListItem> = ArrayList()
     private var baudRate = 9600
@@ -42,38 +48,93 @@ class MainActivity : AppCompatActivity(){
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        /*binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)*/
 
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val provider = locationManager.getBestProvider(Criteria(), false)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            location = locationManager.getLastKnownLocation(provider!!)
+            //val latitude = location?.latitude
+            //val longitude = location?.longitude
+            // hacer algo con la latitud y longitud obtenidas
+            showCurrentLocation(location)
+            //Toast.makeText(this,"Location: $latitude, $longitude",Toast.LENGTH_SHORT).show()
+        }
+        handler.postDelayed(runnable, 8000)
         if(savedInstanceState == null){
-            /*mThread = HandlerThread("MyThread")
-            mThread!!.start()
-            mHandler = Handler(mThread!!.looper)
-            mRunnable = MyTimerRunnable()*/
             refreshX()
+            //enableMyLocation()
         }
 
-        /*binding.buttonStartService.isEnabled = false
-        binding.buttonStartService.isClickable = false
-
-        binding.buttonStopService.setOnClickListener{
-            stopService()
-        }*/
         finish()
     }
 
-    /*override fun onResume() {
-        super.onResume()
-        mHandler?.removeCallbacks(mRunnable!!)
-        mHandler?.postDelayed(mRunnable!!, EXTENDED_TIMEOUT.toLong())
+    private fun showCurrentLocation(location:Location?){
+        val latitude = location?.latitude
+        val longitude = location?.longitude
+        Toast.makeText(this,"Location: $latitude, $longitude",Toast.LENGTH_SHORT).show()
+    }
 
-    }*/
+    val runnable = object : Runnable {
+        override fun run() {
+            showCurrentLocation(location)
+            // Aquí va la lógica de la función que desea ejecutar cada 8 segundos
+            handler.postDelayed(this, 8000) // Ejecuta de nuevo este Runnable después de 8 segundos
+        }
+    }
 
-    /*override fun onDestroy() {
-        super.onDestroy()
-        mHandler?.removeCallbacks(mRunnable!!)
-        mThread?.quitSafely()
-    }*/
+    private fun enableMyLocation() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_COARSE_LOCATION)
+            == PackageManager.PERMISSION_GRANTED ){
+            //map.isMyLocationEnabled = true
+            Toast.makeText(this,"Permisos aceptados -----",Toast.LENGTH_SHORT).show()
+            return
+        }
+        if(ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            || ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_COARSE_LOCATION)){
+            PermissionUtils.RationaleDialog.newInstance(LOCATION_PERMISSION_REQUEST_CODE, true)
+                .show(supportFragmentManager, "dialog")
+
+            return
+        }
+
+        ActivityCompat.requestPermissions(this, arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION), LOCATION_PERMISSION_REQUEST_CODE)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        if(requestCode != LOCATION_PERMISSION_REQUEST_CODE){
+            super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+            return
+        }
+
+        if(PermissionUtils.isPermissionGranted(permissions, grantResults, Manifest.permission.ACCESS_FINE_LOCATION)
+            ||PermissionUtils.isPermissionGranted(permissions, grantResults, Manifest.permission.ACCESS_COARSE_LOCATION)){
+            enableMyLocation()
+        }else{
+            permissionDenied = true
+        }
+
+    }
+
+    override fun onResumeFragments() {
+        super.onResumeFragments()
+        if(permissionDenied){
+            showMissingPermissionError()
+            permissionDenied = false
+        }
+    }
+
+    private fun showMissingPermissionError() {
+        PermissionUtils.PermissionDeniedDialog.newInstance(true)
+            .show(supportFragmentManager, "dialog")
+    }
 
     fun initialize(){
         try{
@@ -169,10 +230,15 @@ class MainActivity : AppCompatActivity(){
         stopService(serviceIntent)
     }
 
+    companion object {
+        private const val LOCATION_PERMISSION_REQUEST_CODE=21
+    }
+
     private inner class MyTimerRunnable:Runnable{
         override fun run() {
             refreshX()
         }
 
     }
+
 }
