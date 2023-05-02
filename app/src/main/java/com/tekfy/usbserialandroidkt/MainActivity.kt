@@ -2,7 +2,6 @@ package com.tekfy.usbserialandroidkt
 
 import android.Manifest
 import android.app.PendingIntent
-import android.content.ContentValues.TAG
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -12,17 +11,23 @@ import android.location.Criteria
 import android.location.Location
 import android.location.LocationManager
 import android.os.*
+import android.util.Log
 import android.widget.Toast
 
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.gson.Gson
+import com.google.gson.annotations.SerializedName
 
 import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import com.tekfy.usbserialandroidkt.databinding.ActivityMainBinding
 import com.tekfy.usbserialandroidkt.util.PermissionUtils
+import com.tekfy.usbserialandroidkt.util.SocketHandler
+import io.socket.client.Socket;
 import java.util.ArrayList
+import java.util.Calendar
 
 class MainActivity : AppCompatActivity(){
     private lateinit var binding: ActivityMainBinding
@@ -46,20 +51,32 @@ class MainActivity : AppCompatActivity(){
     private var baudRate = 9600
     private var withIoManager = true
 
+    private lateinit var mSocket: Socket
+    private lateinit var messageSocket:String
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        try{
+            SocketHandler.setSocket()
+            mSocket = SocketHandler.getSocket()
+
+            mSocket.connect()
+
+        }catch (e:Exception){
+            e.printStackTrace()
+            Log.d("Fail","Fail to connect socket")
+        }
 
         val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val provider = locationManager.getBestProvider(Criteria(), false)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             location = locationManager.getLastKnownLocation(provider!!)
-            //val latitude = location?.latitude
-            //val longitude = location?.longitude
-            // hacer algo con la latitud y longitud obtenidas
             showCurrentLocation(location)
-            //Toast.makeText(this,"Location: $latitude, $longitude",Toast.LENGTH_SHORT).show()
+
         }
         handler.postDelayed(runnable, 8000)
+
         if(savedInstanceState == null){
             refreshX()
             //enableMyLocation()
@@ -69,9 +86,38 @@ class MainActivity : AppCompatActivity(){
     }
 
     private fun showCurrentLocation(location:Location?){
-        val latitude = location?.latitude
-        val longitude = location?.longitude
+        val latitude = String.format("%.6f",location?.latitude)
+        val longitude = String.format("%.6f",location?.longitude)
+
+        val date = setDateTimeFormat()
+        val dateFormatted = "${date[2]}-${date[1]}-${date[0]} ${date[3]}:${date[4]}:${date[5]}"
+
         Toast.makeText(this,"Location: $latitude, $longitude",Toast.LENGTH_SHORT).show()
+        Toast.makeText(this,"Fecha: ${date[0]}/${date[1]}/${date[2]} ${date[3]}:${date[4]}:${date[5]}",Toast.LENGTH_SHORT).show()
+
+        val messageData = JsonDataParser(latitude, longitude, dateFormatted, "8")
+        messageSocket = Gson().toJson(messageData)
+        Log.i("Message Socket", "Mensaje: $messageSocket")
+        mSocket.emit("message",messageSocket)
+
+    }
+
+    private fun setDateTimeFormat(): Array<Any> {
+        val calendar = Calendar.getInstance()
+        val year = calendar.get(Calendar.YEAR).toString()
+        val month = (calendar.get(Calendar.MONTH)+1)
+        val day = calendar.get(Calendar.DAY_OF_MONTH)
+        val hour = calendar.get(Calendar.HOUR_OF_DAY)
+        val minutes = calendar.get(Calendar.MINUTE)
+        val seconds = calendar.get(Calendar.SECOND)
+
+        val strMonth = if(month < 10) "0$month" else month
+        val strDay = if(day <10) "0$day" else day
+        val strHour = if(hour <10) "0$hour" else hour
+        val strMinutes = if(minutes <10) "0$minutes" else minutes
+        val strSeconds= if(seconds <10) "0$seconds" else seconds
+
+        return arrayOf(strDay,strMonth,year,strHour,strMinutes,strSeconds)
     }
 
     val runnable = object : Runnable {
@@ -196,7 +242,6 @@ class MainActivity : AppCompatActivity(){
 
     override fun onNewIntent(intent: Intent) {
         if ("android.hardware.usb.action.USB_DEVICE_ATTACHED" == intent.action) {
-
             Toast.makeText(this, "USB device detected", Toast.LENGTH_SHORT).show()
         }
         super.onNewIntent(intent)
@@ -240,5 +285,12 @@ class MainActivity : AppCompatActivity(){
         }
 
     }
+
+    data class JsonDataParser(
+        @SerializedName("LatitudTrack") val latitudTrack:String,
+        @SerializedName("LongitudTrack") val longitudTrack:String,
+        @SerializedName("FechaHoraTrack") val fechaHoraTrack:String,
+        @SerializedName("FrecuenciaPosteo") val frecuenciaPosteo:String,
+    )
 
 }

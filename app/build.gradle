@@ -48,6 +48,8 @@ dependencies {
     implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.5.1"
     implementation "androidx.lifecycle:lifecycle-service:2.2.0"
     implementation "com.google.android.gms:play-services-maps:$maps_version"
+    implementation 'com.google.code.gson:gson:2.8.8'
+    implementation ('io.socket:socket.io-client:2.0.0')
 
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
     implementation 'androidx.recyclerview:recyclerview:1.2.1'
